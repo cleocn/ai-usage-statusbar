@@ -1,10 +1,15 @@
-// copilot-usage-statusbar/extension.js
+// ai-usage-statusbar/extension.js
 const vscode = require("vscode");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 
 const COPILOT_USAGE_URL = "https://api.github.com/copilot_internal/user";
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const CODEX_AUTH_PATH = path.join(os.homedir(), ".codex", "auth.json");
 
 let statusBarItem;
+let chatgptStatusBarItem;
 let refreshTimer;
 
 async function activate(context) {
@@ -18,6 +23,15 @@ async function activate(context) {
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
+  // ChatGPT/Codex status bar item (slightly lower priority, appears to the right)
+  chatgptStatusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    49
+  );
+  chatgptStatusBarItem.command = "aiUsage.openChatGPTUsage";
+  chatgptStatusBarItem.show();
+  context.subscriptions.push(chatgptStatusBarItem);
+
   // Register commands
   context.subscriptions.push(
     vscode.commands.registerCommand("copilotUsage.refresh", () => {
@@ -25,14 +39,21 @@ async function activate(context) {
     }),
     vscode.commands.registerCommand("copilotUsage.signIn", () => {
       fetchAndRender(true);
+    }),
+    vscode.commands.registerCommand("aiUsage.openChatGPTUsage", () => {
+      vscode.env.openExternal(vscode.Uri.parse("https://chatgpt.com/codex/settings/usage"));
     })
   );
 
   // Initial fetch
   await fetchAndRender(false);
+  renderChatGPT();
 
   // Periodic refresh
-  refreshTimer = setInterval(() => fetchAndRender(false), REFRESH_INTERVAL_MS);
+  refreshTimer = setInterval(() => {
+    fetchAndRender(false);
+    renderChatGPT();
+  }, REFRESH_INTERVAL_MS);
   context.subscriptions.push({ dispose: () => clearInterval(refreshTimer) });
 }
 
@@ -156,6 +177,73 @@ function renderUsage(data) {
     .filter(Boolean)
     .join("\n");
   statusBarItem.backgroundColor = bgColor;
+}
+
+// ---------- ChatGPT / Codex ----------
+
+function readCodexAuth() {
+  try {
+    if (!fs.existsSync(CODEX_AUTH_PATH)) return null;
+    const raw = fs.readFileSync(CODEX_AUTH_PATH, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const part = token.split(".")[1];
+    // pad base64url
+    const padded = part + "=".repeat((4 - (part.length % 4)) % 4);
+    const json = Buffer.from(padded, "base64").toString("utf8");
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function renderChatGPT() {
+  const auth = readCodexAuth();
+  if (!auth || !auth.tokens) {
+    chatgptStatusBarItem.text = "$(comment) ChatGPT: 未安装";
+    chatgptStatusBarItem.tooltip = "未找到 ~/.codex/auth.json\n请先登录 Codex 插件";
+    return;
+  }
+
+  // Get plan from access_token
+  const accessPayload = decodeJwtPayload(auth.tokens.access_token ?? "");
+  const openaiAuth = accessPayload?.["https://api.openai.com/auth"] ?? {};
+  const plan = openaiAuth.chatgpt_plan_type ?? "unknown";
+
+  // Get subscription until from id_token (more fields there)
+  const idPayload = decodeJwtPayload(auth.tokens.id_token ?? "");
+  const idAuth = idPayload?.["https://api.openai.com/auth"] ?? {};
+  const activeUntil = idAuth.chatgpt_subscription_active_until ?? null;
+
+  const planLabel =
+    plan === "plus" ? "Plus" :
+    plan === "pro" ? "Pro" :
+    plan === "free" ? "Free" :
+    plan.charAt(0).toUpperCase() + plan.slice(1);
+
+  let renewalStr = "";
+  let renewalFull = "";
+  if (activeUntil) {
+    const d = new Date(activeUntil);
+    renewalStr = " · 续" + d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+    renewalFull = "订阅到期: " + d.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
+  }
+
+  chatgptStatusBarItem.text = `$(comment) ChatGPT ${planLabel}${renewalStr}`;
+  chatgptStatusBarItem.tooltip = [
+    `ChatGPT ${planLabel} 订阅`,
+    renewalFull,
+    "",
+    "实时用量请在 Codex 插件中查看",
+    "点击打开 chatgpt.com/codex/settings/usage",
+  ].filter(Boolean).join("\n");
+  chatgptStatusBarItem.backgroundColor = undefined;
 }
 
 function deactivate() {

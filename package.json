@@ -17,6 +17,10 @@
       {
         "command": "copilotUsage.signIn",
         "title": "Copilot Usage: Sign in to GitHub"
+      },
+      {
+        "command": "aiUsage.openChatGPTUsage",
+        "title": "AI Usage: Open ChatGPT Usage Page"
       }
     ]
   }

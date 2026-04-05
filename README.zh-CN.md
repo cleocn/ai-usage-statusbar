@@ -8,7 +8,11 @@
 
 ## 功能特性
 
-- **三家提供商** — GitHub Copilot 配额、ChatGPT 套餐信息、Cursor 本月请求数
+- **三家提供商** — GitHub Copilot 配额、ChatGPT/Codex 双窗口用量、Cursor 双额度用量
+- **Cursor 双额度** — 状态栏同时显示 **Auto + Composer 剩余百分比** 与 **API 剩余百分比**
+- **Codex 双窗口** — 状态栏同时显示 **5h 剩余百分比** 和 **7d 剩余百分比**
+- **官方 codicon 图标** — 使用内置 `$(copilot)`、`$(openai)`、`$(cursor)`
+- **统一外显规范** — 所有提供商都优先显示余量信息，状态栏格式保持一致
 - **颜色预警** — Copilot 剩余 ≤ 25% 时状态栏变橙色，≤ 10% 时附加警告图标
 - **悬浮详情** — 鼠标悬停显示每家提供商的详细信息
 - **自动刷新** — 每 30 分钟在后台自动更新
@@ -19,11 +23,11 @@
 
 | 提供商 | 数据内容 | 数据来源 |
 |--------|---------|---------|
-| GitHub Copilot | 高级请求已用 / 总量 | `api.github.com/copilot_internal/user` |
-| ChatGPT | 套餐类型（Plus / Pro / Free）+ 续费日期 | `~/.codex/auth.json` JWT |
-| Cursor | 本月请求总数 | `api2.cursor.sh/auth/usage` |
+| GitHub Copilot | 高级请求剩余 / 总量 + 剩余百分比 | `api.github.com/copilot_internal/user` |
+| ChatGPT / Codex | 套餐类型 + 续费日期 + **5h/7d 用量窗口** | `~/.codex/auth.json` JWT + `~/.codex/logs_1.sqlite` 响应头 |
+| Cursor | 当前计费周期 **Auto + Composer 剩余 %** 与 **API 剩余 %** | `api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage` |
 
-> ChatGPT 实时剩余次数无任何 API 可查，仅从 Codex CLI 本地缓存的 JWT 读取套餐信息。
+> Codex 窗口用量来自本地 Codex 日志中的最近一次 API 响应头，因此至少先使用一次 Codex 才会出现数据。
 
 ## 安装
 
@@ -47,6 +51,21 @@ code --install-extension ai-usage-statusbar-1.0.0.vsix
 - 安装并登录 [OpenAI Codex CLI](https://github.com/openai/codex)（ChatGPT 信息需要）
 - 安装并登录 [Cursor](https://cursor.sh)（Cursor 信息需要）
 
+## 平台支持
+
+| 提供商 | macOS | Windows | Linux |
+|--------|-------|---------|-------|
+| GitHub Copilot | ✅ | ✅ | ✅ |
+| ChatGPT / Codex | ✅ | ✅ | ✅ |
+| Cursor | ✅ | ✅ | ✅ |
+
+Cursor 的 `state.vscdb` 路径按平台自动解析：
+- **macOS**：`~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`
+- **Windows**：`%APPDATA%/Cursor/User/globalStorage/state.vscdb`
+- **Linux**：`~/.config/Cursor/User/globalStorage/state.vscdb`
+
+Codex 路径（`~/.codex/`）和 Copilot API 调用默认即跨平台兼容。
+
 ## 设置项
 
 在 VS Code 设置中搜索 **"AI Usage"**，或直接编辑 `settings.json`：
@@ -68,8 +87,8 @@ code --install-extension ai-usage-statusbar-1.0.0.vsix
 
 | 风格 | Copilot | ChatGPT | Cursor |
 |------|---------|---------|--------|
-| `minimal` | `⊙ 32/50` | `💬 Plus` | `✦ 128` |
-| `verbose` | `⊙ Copilot 32/50` | `💬 ChatGPT Plus` | `✦ Cursor 128` |
+| `minimal` | `$(copilot) 32/50 64%` | `$(openai) 5h90% 7d54%` | `$(cursor) AUTO21% API0%` |
+| `verbose` | `$(copilot) Copilot 32/50 64%` | `$(openai) Codex 5h90% 7d54%` | `$(cursor) Cursor AUTO21% API0%` |
 
 设置修改后立即生效，无需重新加载。
 
@@ -85,8 +104,8 @@ code --install-extension ai-usage-statusbar-1.0.0.vsix
 ## 工作原理
 
 - **Copilot**：调用 `vscode.authentication.getSession('github', ['read:user'])` 获取 Token → 请求 `api.github.com/copilot_internal/user`（未文档化内部接口，可能随时变更）
-- **ChatGPT**：读取 `~/.codex/auth.json`，解码 JWT 提取套餐类型和订阅日期
-- **Cursor**：读取 `state.vscdb`（SQLite）获取 Bearer Token → 请求 `api2.cursor.sh/auth/usage`
+- **ChatGPT/Codex**：读取 `~/.codex/auth.json` 获取套餐/续费信息，再从 `~/.codex/logs_1.sqlite` 的 `x-codex-*` 响应头提取窗口用量
+- **Cursor**：读取 `state.vscdb`（SQLite）获取 Bearer Token → 请求 `api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage` 获取 Auto/API 百分比（必要时回退 `auth/usage`）
 
 ## License
 

@@ -8,8 +8,12 @@ English | [中文](./README.zh-CN.md)
 
 ## Features
 
-- **3 providers** — GitHub Copilot quota, ChatGPT plan info, and Cursor monthly request count
-- **Color warnings** — status bar turns orange when Copilot quota ≤ 25% remaining
+- **3 providers** — GitHub Copilot quota, ChatGPT/Codex quota windows, and Cursor dual-usage percentages
+- **Cursor dual usage** — shows both **Auto + Composer remaining %** and **API remaining %** in the status bar
+- **Codex dual windows** — shows both **5h remaining %** and **7d remaining %** in the status bar
+- **Official codicons** — uses built-in `$(copilot)`, `$(openai)`, and `$(cursor)` icons
+- **Unified external format** — all providers display remaining quota first in a compact format
+- **Color warnings** — warns on low remaining quota (Copilot / Codex / Cursor)
 - **Hover tooltip** — detailed breakdown on hover for each provider
 - **Auto-refresh** — updates every 30 minutes in the background
 - **Style switching** — toggle between `minimal` (`32/50`) and `verbose` (`Copilot 32/50`) via settings
@@ -19,11 +23,11 @@ English | [中文](./README.zh-CN.md)
 
 | Provider | Metric | Source |
 |----------|--------|--------|
-| GitHub Copilot | Premium interactions used / total | `api.github.com/copilot_internal/user` |
-| ChatGPT | Plan type (Plus / Pro / Free) + renewal date | `~/.codex/auth.json` JWT |
-| Cursor | Monthly request count | `api2.cursor.sh/auth/usage` |
+| GitHub Copilot | Premium interactions remaining / total + remaining % | `api.github.com/copilot_internal/user` |
+| ChatGPT / Codex | Plan type + renewal date + **5h/7d usage windows** | `~/.codex/auth.json` JWT + `~/.codex/logs_1.sqlite` response headers |
+| Cursor | **Auto + Composer remaining %** and **API remaining %** (current billing cycle) | `api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage` |
 
-> ChatGPT real-time remaining count is not available via any API. Plan info is read locally from the Codex CLI auth file.
+> Codex window usage is extracted from local Codex logs (latest API response headers), so it appears after you use Codex at least once.
 
 ## Installation
 
@@ -47,6 +51,21 @@ code --install-extension ai-usage-statusbar-1.0.0.vsix
 - [OpenAI Codex CLI](https://github.com/openai/codex) installed and signed in (for ChatGPT info)
 - [Cursor](https://cursor.sh) installed and signed in (for Cursor info)
 
+## Platform Support
+
+| Provider | macOS | Windows | Linux |
+|----------|-------|---------|-------|
+| GitHub Copilot | ✅ | ✅ | ✅ |
+| ChatGPT / Codex | ✅ | ✅ | ✅ |
+| Cursor | ✅ | ✅ | ✅ |
+
+Cursor's `state.vscdb` is resolved per platform automatically:
+- **macOS**: `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`
+- **Windows**: `%APPDATA%/Cursor/User/globalStorage/state.vscdb`
+- **Linux**: `~/.config/Cursor/User/globalStorage/state.vscdb`
+
+Codex paths (`~/.codex/`) and Copilot API calls are cross-platform by default.
+
 ## Settings
 
 Search **"AI Usage"** in VS Code Settings, or edit `settings.json` directly:
@@ -68,8 +87,8 @@ Search **"AI Usage"** in VS Code Settings, or edit `settings.json` directly:
 
 | Style | Copilot | ChatGPT | Cursor |
 |-------|---------|---------|--------|
-| `minimal` | `⊙ 32/50` | `💬 Plus` | `✦ 128` |
-| `verbose` | `⊙ Copilot 32/50` | `💬 ChatGPT Plus` | `✦ Cursor 128` |
+| `minimal` | `$(copilot) 32/50 64%` | `$(openai) 5h90% 7d54%` | `$(cursor) AUTO21% API0%` |
+| `verbose` | `$(copilot) Copilot 32/50 64%` | `$(openai) Codex 5h90% 7d54%` | `$(cursor) Cursor AUTO21% API0%` |
 
 Settings take effect immediately without reloading.
 
@@ -85,8 +104,8 @@ Settings take effect immediately without reloading.
 ## How it works
 
 - **Copilot**: calls `vscode.authentication.getSession('github', ['read:user'])` → queries `api.github.com/copilot_internal/user` (undocumented internal endpoint, may change)
-- **ChatGPT**: reads `~/.codex/auth.json`, decodes the JWT to extract plan type and subscription date
-- **Cursor**: reads `state.vscdb` (SQLite) for the Bearer token → queries `api2.cursor.sh/auth/usage`
+- **ChatGPT/Codex**: reads `~/.codex/auth.json` for plan/subscription and `~/.codex/logs_1.sqlite` for `x-codex-*` usage headers
+- **Cursor**: reads `state.vscdb` (SQLite) for the Bearer token → queries `api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage` for Auto/API percentages (falls back to `auth/usage` when needed)
 
 ## License
 

@@ -1,6 +1,6 @@
 # AI Usage Status Bar
 
-在 VS Code 状态栏直接显示 **GitHub Copilot 高级请求用量**，无需打开浏览器。
+在 VS Code 状态栏直接显示 **GitHub Copilot、ChatGPT、Cursor** 的用量信息，无需打开浏览器。
 
 ![状态栏预览](https://img.shields.io/badge/Copilot-32%2F50-blue?style=flat-square&logo=githubcopilot)
 
@@ -8,22 +8,22 @@
 
 ## 功能特性
 
-- **实时用量显示** — 状态栏展示已用 / 总量（如 `⊙ Copilot: 32/50`）
-- **颜色预警** — 剩余 ≤ 25% 时状态栏变橙色，≤ 10% 时附加警告图标
-- **悬浮详情** — 鼠标悬停显示已用量、剩余量、重置日期
+- **三家提供商** — GitHub Copilot 配额、ChatGPT 套餐信息、Cursor 本月请求数
+- **颜色预警** — Copilot 剩余 ≤ 25% 时状态栏变橙色，≤ 10% 时附加警告图标
+- **悬浮详情** — 鼠标悬停显示每家提供商的详细信息
 - **自动刷新** — 每 30 分钟在后台自动更新
-- **点击刷新** — 点击状态栏条目可立即刷新
-- **无限制套餐支持** — Pro / Business / Enterprise 套餐显示 `Copilot Pro · 无限制`
+- **风格切换** — 通过设置在 `minimal`（`32/50`）和 `verbose`（`Copilot 32/50`）之间切换
+- **按需开关** — 可独立控制每家提供商的状态栏条目显示与隐藏
 
 ## 数据说明
 
-| 指标 | 是否支持 |
-|------|---------|
-| 高级请求次数（GPT-4o、Claude 等） | ✅ |
-| 配额重置日期 | ✅ |
-| 代码补全次数（Free 套餐 2000 次/月） | ❌ GitHub 未提供查询接口 |
+| 提供商 | 数据内容 | 数据来源 |
+|--------|---------|---------|
+| GitHub Copilot | 高级请求已用 / 总量 | `api.github.com/copilot_internal/user` |
+| ChatGPT | 套餐类型（Plus / Pro / Free）+ 续费日期 | `~/.codex/auth.json` JWT |
+| Cursor | 本月请求总数 | `api2.cursor.sh/auth/usage` |
 
-> GitHub Copilot **免费套餐**每月包含 **50 次高级请求**。普通代码补全使用基础模型，不计入此配额，GitHub 也未提供相关 API。
+> ChatGPT 实时剩余次数无任何 API 可查，仅从 Codex CLI 本地缓存的 JWT 读取套餐信息。
 
 ## 安装
 
@@ -37,31 +37,56 @@
 ### 从 VSIX 安装（发布后）
 
 ```
-code --install-extension copilot-usage-statusbar-1.0.0.vsix
+code --install-extension ai-usage-statusbar-1.0.0.vsix
 ```
 
 ## 环境要求
 
 - VS Code 1.74+
 - 已在 VS Code 中登录 GitHub 账号并开启 Copilot
+- 安装并登录 [OpenAI Codex CLI](https://github.com/openai/codex)（ChatGPT 信息需要）
+- 安装并登录 [Cursor](https://cursor.sh)（Cursor 信息需要）
 
-首次启动时扩展会弹出 GitHub OAuth 授权请求（使用 VS Code 内置 GitHub 认证流程，无需填写任何额外 Token）。
+## 设置项
 
-## 工作原理
+在 VS Code 设置中搜索 **"AI Usage"**，或直接编辑 `settings.json`：
 
-1. 调用 `vscode.authentication.getSession('github', ['read:user'])` 通过 VS Code 内置认证获取 GitHub OAuth Token
-2. 请求内部接口 `GET https://api.github.com/copilot_internal/user`
-3. 读取响应中的 `quota_snapshots.premium_interactions` 字段
-4. 将结果渲染到状态栏
+```jsonc
+{
+  // "minimal"（默认）：只显示图标和数字
+  // "verbose"：同时显示提供商名称
+  "aiUsage.style": "minimal",
 
-> **注意：** `copilot_internal/user` 是 GitHub 内部未文档化的接口，可能随时变更。若接口失效，状态栏会显示"获取失败"，点击可重试。
+  // 控制每家提供商的状态栏条目
+  "aiUsage.providers.copilot": true,
+  "aiUsage.providers.chatgpt": true,
+  "aiUsage.providers.cursor": true
+}
+```
+
+**风格对比：**
+
+| 风格 | Copilot | ChatGPT | Cursor |
+|------|---------|---------|--------|
+| `minimal` | `⊙ 32/50` | `💬 Plus` | `✦ 128` |
+| `verbose` | `⊙ Copilot 32/50` | `💬 ChatGPT Plus` | `✦ Cursor 128` |
+
+设置修改后立即生效，无需重新加载。
 
 ## 命令
 
 | 命令 | 说明 |
 |------|------|
-| `Copilot Usage: Refresh` | 手动刷新用量数据 |
+| `Copilot Usage: Refresh` | 手动刷新 Copilot 用量 |
 | `Copilot Usage: Sign in to GitHub` | 触发 GitHub 登录流程 |
+| `AI Usage: Open ChatGPT Usage Page` | 打开 chatgpt.com 用量设置页 |
+| `AI Usage: Refresh Cursor Usage` | 手动刷新 Cursor 用量 |
+
+## 工作原理
+
+- **Copilot**：调用 `vscode.authentication.getSession('github', ['read:user'])` 获取 Token → 请求 `api.github.com/copilot_internal/user`（未文档化内部接口，可能随时变更）
+- **ChatGPT**：读取 `~/.codex/auth.json`，解码 JWT 提取套餐类型和订阅日期
+- **Cursor**：读取 `state.vscdb`（SQLite）获取 Bearer Token → 请求 `api2.cursor.sh/auth/usage`
 
 ## License
 

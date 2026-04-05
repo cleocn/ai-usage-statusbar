@@ -7,6 +7,7 @@ const path = require("path");
 const COPILOT_USAGE_URL = "https://api.github.com/copilot_internal/user";
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const CODEX_AUTH_PATH = path.join(os.homedir(), ".codex", "auth.json");
+const CODEX_LOGS_DB_PATH = path.join(os.homedir(), ".codex", "logs_1.sqlite");
 const CURSOR_DB_PATH = path.join(
   os.homedir(),
   os.platform() === "win32"
@@ -241,6 +242,37 @@ function decodeJwtPayload(token) {
   }
 }
 
+function readCodexRateLimits() {
+  try {
+    if (!fs.existsSync(CODEX_LOGS_DB_PATH)) return null;
+    // Query most recent log entry that contains codex rate limit headers
+    const { execSync } = require("child_process");
+    const sql = "SELECT feedback_log_body FROM logs WHERE feedback_log_body LIKE '%x-codex-primary-used-percent%' ORDER BY ts DESC LIMIT 1;";
+    const result = execSync(
+      `sqlite3 "${CODEX_LOGS_DB_PATH}" "${sql.replace(/"/g, '\\"')}"`,
+      { encoding: "utf8", timeout: 4000 }
+    ).trim();
+    if (!result) return null;
+
+    // Extract individual header values via regex (the JSON may be truncated in the log)
+    const extract = (key) => {
+      const m = result.match(new RegExp(`"${key}":\\s*"([^"]*)"`));
+      return m ? m[1] : null;
+    };
+    return {
+      planType:           extract("x-codex-plan-type"),
+      primaryUsedPct:     extract("x-codex-primary-used-percent"),
+      secondaryUsedPct:   extract("x-codex-secondary-used-percent"),
+      primaryWindowMin:   extract("x-codex-primary-window-minutes"),
+      secondaryWindowMin: extract("x-codex-secondary-window-minutes"),
+      primaryResetAt:     extract("x-codex-primary-reset-at"),
+      secondaryResetAt:   extract("x-codex-secondary-reset-at"),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function renderChatGPT() {
   const auth = readCodexAuth();
   if (!auth || !auth.tokens) {
@@ -274,15 +306,60 @@ function renderChatGPT() {
   }
 
   const verbose = getConfig().get('style', 'minimal') === 'verbose';
-  chatgptStatusBarItem.text = verbose ? `$(comment) ChatGPT ${planLabel}` : `$(comment) ${planLabel}`;
-  chatgptStatusBarItem.tooltip = [
-    `ChatGPT ${planLabel} 订阅`,
-    renewalFull,
-    "",
-    "实时用量请在 Codex 插件中查看",
-    "点击打开 chatgpt.com/codex/settings/usage",
-  ].filter(Boolean).join("\n");
-  chatgptStatusBarItem.backgroundColor = undefined;
+
+  // Try to read rate limit data from Codex logs SQLite
+  const rl = readCodexRateLimits();
+  let usageStr = "";
+  let usageTooltip = "";
+  if (rl && rl.primaryUsedPct !== null && rl.secondaryUsedPct !== null) {
+    const primUsed = parseInt(rl.primaryUsedPct, 10);
+    const secUsed  = parseInt(rl.secondaryUsedPct, 10);
+    const primRem  = 100 - primUsed;
+    const secRem   = 100 - secUsed;
+    const primWin  = rl.primaryWindowMin ? `${Math.round(parseInt(rl.primaryWindowMin, 10) / 60)}h` : "5h";
+    const secWin   = rl.secondaryWindowMin ? `${Math.round(parseInt(rl.secondaryWindowMin, 10) / (60 * 24))}d` : "7d";
+
+    let resetStr = "";
+    if (rl.secondaryResetAt) {
+      const resetDate = new Date(parseInt(rl.secondaryResetAt, 10) * 1000);
+      resetStr = resetDate.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+    }
+
+    // show secondary (weekly) as primary number; flag low secondary
+    usageStr = `${secRem}%`;
+    if (secRem <= 20) {
+      chatgptStatusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+    } else {
+      chatgptStatusBarItem.backgroundColor = undefined;
+    }
+
+    usageTooltip = [
+      `ChatGPT/Codex 用量 (${planLabel})`,
+      `${primWin} 窗口: 已用 ${primUsed}% / 剩余 ${primRem}%`,
+      `${secWin} 窗口: 已用 ${secUsed}% / 剩余 ${secRem}%`,
+      resetStr ? `7d 窗口重置: ${resetStr}` : "",
+      renewalFull,
+      "",
+      "数据来自 Codex 最近一次 API 调用的响应头",
+      "点击打开 chatgpt.com/codex/settings/usage",
+    ].filter(Boolean).join("\n");
+  } else {
+    chatgptStatusBarItem.backgroundColor = undefined;
+    usageTooltip = [
+      `ChatGPT ${planLabel} 订阅`,
+      renewalFull,
+      "",
+      "暂无 Codex 用量数据（需先使用 Codex 插件发起请求）",
+      "点击打开 chatgpt.com/codex/settings/usage",
+    ].filter(Boolean).join("\n");
+  }
+
+  const displayLabel = rl && rl.primaryUsedPct !== null
+    ? (verbose ? `$(comment) Codex ${usageStr}` : `$(comment) ${usageStr}`)
+    : (verbose ? `$(comment) ChatGPT ${planLabel}` : `$(comment) ${planLabel}`);
+
+  chatgptStatusBarItem.text = displayLabel;
+  chatgptStatusBarItem.tooltip = usageTooltip;
 }
 
 function deactivate() {

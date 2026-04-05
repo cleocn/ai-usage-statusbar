@@ -1,0 +1,23 @@
+{
+  "name": "copilot-usage-statusbar",
+  "displayName": "Copilot Usage Status Bar",
+  "description": "Show GitHub Copilot premium request usage in the VS Code status bar",
+  "version": "1.0.0",
+  "publisher": "local",
+  "engines": { "vscode": "^1.74.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilotUsage.refresh",
+        "title": "Copilot Usage: Refresh"
+      },
+      {
+        "command": "copilotUsage.signIn",
+        "title": "Copilot Usage: Sign in to GitHub"
+      }
+    ]
+  }
+}

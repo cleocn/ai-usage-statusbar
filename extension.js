@@ -7,9 +7,18 @@ const path = require("path");
 const COPILOT_USAGE_URL = "https://api.github.com/copilot_internal/user";
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const CODEX_AUTH_PATH = path.join(os.homedir(), ".codex", "auth.json");
+const CURSOR_DB_PATH = path.join(
+  os.homedir(),
+  os.platform() === "win32"
+    ? "AppData/Roaming/Cursor/User/globalStorage/state.vscdb"
+    : os.platform() === "linux"
+    ? ".config/Cursor/User/globalStorage/state.vscdb"
+    : "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+);
 
 let statusBarItem;
 let chatgptStatusBarItem;
+let cursorStatusBarItem;
 let refreshTimer;
 
 async function activate(context) {
@@ -32,6 +41,15 @@ async function activate(context) {
   chatgptStatusBarItem.show();
   context.subscriptions.push(chatgptStatusBarItem);
 
+  // Cursor status bar item
+  cursorStatusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    48
+  );
+  cursorStatusBarItem.command = "aiUsage.refreshCursor";
+  cursorStatusBarItem.show();
+  context.subscriptions.push(cursorStatusBarItem);
+
   // Register commands
   context.subscriptions.push(
     vscode.commands.registerCommand("copilotUsage.refresh", () => {
@@ -42,17 +60,22 @@ async function activate(context) {
     }),
     vscode.commands.registerCommand("aiUsage.openChatGPTUsage", () => {
       vscode.env.openExternal(vscode.Uri.parse("https://chatgpt.com/codex/settings/usage"));
+    }),
+    vscode.commands.registerCommand("aiUsage.refreshCursor", () => {
+      fetchAndRenderCursor();
     })
   );
 
   // Initial fetch
   await fetchAndRender(false);
   renderChatGPT();
+  fetchAndRenderCursor();
 
   // Periodic refresh
   refreshTimer = setInterval(() => {
     fetchAndRender(false);
     renderChatGPT();
+    fetchAndRenderCursor();
   }, REFRESH_INTERVAL_MS);
   context.subscriptions.push({ dispose: () => clearInterval(refreshTimer) });
 }
@@ -248,6 +271,98 @@ function renderChatGPT() {
 
 function deactivate() {
   clearInterval(refreshTimer);
+}
+
+// ---------- Cursor ----------
+
+const { execSync } = require("child_process");
+
+function readCursorDb(key) {
+  try {
+    if (!fs.existsSync(CURSOR_DB_PATH)) return null;
+    const result = execSync(
+      `sqlite3 "${CURSOR_DB_PATH}" "SELECT value FROM ItemTable WHERE key='${key}';"`,
+      { encoding: "utf8", timeout: 4000 }
+    ).trim();
+    return result || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchAndRenderCursor() {
+  cursorStatusBarItem.text = "$(sync~spin) Cursor";
+  cursorStatusBarItem.tooltip = "Cursor 用量加载中…";
+
+  const token = readCursorDb("cursorAuth/accessToken");
+  const plan = readCursorDb("cursorAuth/stripeMembershipType") ?? "unknown";
+  const status = readCursorDb("cursorAuth/stripeSubscriptionStatus") ?? "";
+
+  if (!token) {
+    cursorStatusBarItem.text = "$(cursor) Cursor: 未登录";
+    cursorStatusBarItem.tooltip = "未找到 Cursor 登录信息\n请先在 Cursor 中登录账号";
+    return;
+  }
+
+  // Decode JWT for userId
+  const payload = decodeJwtPayload(token);
+  const sub = payload?.sub ?? "";
+  const userId = sub.includes("|") ? sub.split("|").pop() : sub;
+
+  const planLabel =
+    plan === "pro" ? "Pro" :
+    plan === "free" ? "Free" :
+    plan === "business" ? "Business" :
+    plan.charAt(0).toUpperCase() + plan.slice(1);
+
+  try {
+    const res = await fetch(
+      `https://api2.cursor.sh/auth/usage?user=${encodeURIComponent(userId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Aggregate numRequests across all models
+    let totalRequests = 0;
+    let maxRequests = null;
+    let startOfMonth = null;
+    for (const [key, val] of Object.entries(data)) {
+      if (key === "startOfMonth") { startOfMonth = val; continue; }
+      if (typeof val === "object" && val !== null) {
+        totalRequests += val.numRequests ?? 0;
+        if (val.maxRequestUsage) maxRequests = val.maxRequestUsage;
+      }
+    }
+
+    const resetStr = startOfMonth
+      ? new Date(startOfMonth).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
+      : "";
+
+    const usageStr = maxRequests
+      ? `${totalRequests}/${maxRequests}`  // limited plan
+      : `本月 ${totalRequests} 次`;              // unlimited (Pro)
+
+    cursorStatusBarItem.text = `$(cursor) Cursor ${planLabel} · ${usageStr}`;
+    cursorStatusBarItem.tooltip = [
+      `Cursor ${planLabel}${status === "active" ? " (订阅中)" : ""}`,
+      `本月请求数: ${totalRequests}${maxRequests ? " / " + maxRequests : ""}`,
+      resetStr ? `计费周期开始: ${resetStr}` : "",
+      "",
+      "点击刷新",
+    ].filter(Boolean).join("\n");
+    cursorStatusBarItem.backgroundColor = undefined;
+  } catch (e) {
+    cursorStatusBarItem.text = `$(cursor) Cursor ${planLabel}`;
+    cursorStatusBarItem.tooltip = `获取失败: ${e.message}\n点击重试`;
+    cursorStatusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+  }
 }
 
 module.exports = { activate, deactivate };

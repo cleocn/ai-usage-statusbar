@@ -21,6 +21,10 @@
       {
         "command": "aiUsage.openChatGPTUsage",
         "title": "AI Usage: Open ChatGPT Usage Page"
+      },
+      {
+        "command": "aiUsage.refreshCursor",
+        "title": "AI Usage: Refresh Cursor Usage"
       }
     ]
   }

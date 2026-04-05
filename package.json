@@ -1,6 +1,6 @@
 {
-  "name": "copilot-usage-statusbar",
-  "displayName": "Copilot Usage Status Bar",
+  "name": "ai-usage-statusbar",
+  "displayName": "AI Usage Status Bar",
   "description": "Show GitHub Copilot premium request usage in the VS Code status bar",
   "version": "1.0.0",
   "publisher": "local",

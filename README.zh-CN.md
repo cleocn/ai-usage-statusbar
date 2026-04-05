@@ -1,4 +1,4 @@
-# Copilot Usage Status Bar
+# AI Usage Status Bar
 
 在 VS Code 状态栏直接显示 **GitHub Copilot 高级请求用量**，无需打开浏览器。
 

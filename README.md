@@ -1,4 +1,4 @@
-# Copilot Usage Status Bar
+# AI Usage Status Bar
 
 A minimal VS Code extension that shows your **GitHub Copilot premium request usage** directly in the status bar — no browser needed.
 

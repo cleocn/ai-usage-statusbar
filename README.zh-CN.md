@@ -2,7 +2,7 @@
 
 在 VS Code 状态栏直接显示 **GitHub Copilot、ChatGPT、Cursor** 的用量信息，无需打开浏览器。
 
-![状态栏预览](https://img.shields.io/badge/Copilot-32%2F50-blue?style=flat-square&logo=githubcopilot)
+![状态栏预览](./assets/statusbar-preview.png)
 
 [English](./README.md) | 中文
 

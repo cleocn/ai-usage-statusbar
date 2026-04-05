@@ -2,7 +2,7 @@
 
 A minimal VS Code extension that shows **GitHub Copilot, ChatGPT, and Cursor** usage directly in the status bar — no browser needed.
 
-![Status bar preview](https://img.shields.io/badge/Copilot-32%2F50-blue?style=flat-square&logo=githubcopilot)
+![Status bar preview](./assets/statusbar-preview.png)
 
 English | [中文](./README.zh-CN.md)
 

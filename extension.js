@@ -148,25 +148,21 @@ function renderUsage(data) {
   const snap = data.quota_snapshots?.premium_interactions;
 
   if (!snap) {
-    // Paid plan with unlimited premium interactions
     const planLabel =
-      plan === "individual_pro" || plan === "individual"
-        ? "Pro"
-        : plan === "business"
-        ? "Business"
-        : plan === "enterprise"
-        ? "Enterprise"
-        : plan;
-    statusBarItem.text = `$(copilot) Copilot ${planLabel} · 无限制`;
-    statusBarItem.tooltip = `GitHub Copilot ${planLabel}\n不限高级请求`;
+      plan === "individual_pro" || plan === "individual" ? "Pro"
+      : plan === "business" ? "Biz"
+      : plan === "enterprise" ? "Ent"
+      : plan;
+    statusBarItem.text = `$(copilot) ${planLabel}`;
+    statusBarItem.tooltip = `GitHub Copilot ${planLabel}\n不限高级请求\n\n点击刷新`;
     statusBarItem.backgroundColor = undefined;
     return;
   }
 
   const { entitlement, percent_remaining, unlimited, overage_count } = snap;
   if (unlimited) {
-    statusBarItem.text = `$(copilot) Copilot · 无限制`;
-    statusBarItem.tooltip = `高级请求: 无上限`;
+    statusBarItem.text = `$(copilot) ∞`;
+    statusBarItem.tooltip = `GitHub Copilot\n高级请求: 无上限\n\n点击刷新`;
     statusBarItem.backgroundColor = undefined;
     return;
   }
@@ -174,20 +170,18 @@ function renderUsage(data) {
   const used = Math.round(entitlement * (1 - percent_remaining / 100));
   const remaining = entitlement - used;
   const pct = Math.round(percent_remaining);
-  const overageStr = overage_count > 0 ? ` +${overage_count}超出` : "";
+  const overageStr = overage_count > 0 ? `+${overage_count}` : "";
 
-  // Status icon based on remaining %
   let icon = "$(copilot)";
   let bgColor = undefined;
   if (pct <= 10) {
     icon = "$(warning)";
     bgColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   } else if (pct <= 25) {
-    icon = "$(copilot)";
     bgColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   }
 
-  statusBarItem.text = `${icon} Copilot: ${remaining}/${entitlement}${overageStr}`;
+  statusBarItem.text = `${icon} ${remaining}/${entitlement}${overageStr}`;
   statusBarItem.tooltip = [
     `GitHub Copilot 高级请求`,
     `已用: ${used} / ${entitlement}`,
@@ -196,9 +190,7 @@ function renderUsage(data) {
     overage_count > 0 ? `超额使用: ${overage_count} 次` : "",
     ``,
     `点击刷新`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ].filter(Boolean).join("\n");
   statusBarItem.backgroundColor = bgColor;
 }
 
@@ -258,7 +250,7 @@ function renderChatGPT() {
     renewalFull = "订阅到期: " + d.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
   }
 
-  chatgptStatusBarItem.text = `$(comment) ChatGPT ${planLabel}${renewalStr}`;
+  chatgptStatusBarItem.text = `$(comment) ${planLabel}`;
   chatgptStatusBarItem.tooltip = [
     `ChatGPT ${planLabel} 订阅`,
     renewalFull,
@@ -346,10 +338,10 @@ async function fetchAndRenderCursor() {
       : "";
 
     const usageStr = maxRequests
-      ? `${totalRequests}/${maxRequests}`  // limited plan
-      : `本月 ${totalRequests} 次`;              // unlimited (Pro)
+      ? `${totalRequests}/${maxRequests}`
+      : `${totalRequests}`;
 
-    cursorStatusBarItem.text = `$(cursor) Cursor ${planLabel} · ${usageStr}`;
+    cursorStatusBarItem.text = `$(cursor) ${usageStr}`;
     cursorStatusBarItem.tooltip = [
       `Cursor ${planLabel}${status === "active" ? " (订阅中)" : ""}`,
       `本月请求数: ${totalRequests}${maxRequests ? " / " + maxRequests : ""}`,
@@ -359,8 +351,8 @@ async function fetchAndRenderCursor() {
     ].filter(Boolean).join("\n");
     cursorStatusBarItem.backgroundColor = undefined;
   } catch (e) {
-    cursorStatusBarItem.text = `$(cursor) Cursor ${planLabel}`;
-    cursorStatusBarItem.tooltip = `获取失败: ${e.message}\n点击重试`;
+    cursorStatusBarItem.text = `$(cursor) -`;
+    cursorStatusBarItem.tooltip = `Cursor 获取失败: ${e.message}\n点击重试`;
     cursorStatusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   }
 }

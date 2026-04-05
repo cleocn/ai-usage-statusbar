@@ -4,6 +4,8 @@ A minimal VS Code extension that shows your **GitHub Copilot premium request usa
 
 ![Status bar preview](https://img.shields.io/badge/Copilot-32%2F50-blue?style=flat-square&logo=githubcopilot)
 
+English | [中文](./README.zh-CN.md)
+
 ## Features
 
 - **Real-time quota display** — shows used / total premium interactions (e.g. `⊙ Copilot: 32/50`)

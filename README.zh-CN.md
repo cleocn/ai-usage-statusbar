@@ -11,7 +11,7 @@
 - **三家提供商** — GitHub Copilot 配额、ChatGPT/Codex 双窗口用量、Cursor 双额度用量
 - **Cursor 双额度** — 状态栏同时显示 **Auto + Composer 剩余百分比** 与 **API 剩余百分比**
 - **Codex 双窗口** — 状态栏同时显示 **5h 剩余百分比** 和 **7d 剩余百分比**
-- **官方 codicon 图标** — 使用内置 `$(copilot)`、`$(openai)`、`$(cursor)`
+- **官方 + 自定义图标** — 使用内置 `$(copilot)`、`$(openai)` 和自定义 `$(cursor-logo)`
 - **统一外显规范** — 所有提供商都优先显示余量信息，状态栏格式保持一致
 - **颜色预警** — Copilot 剩余 ≤ 25% 时状态栏变橙色，≤ 10% 时附加警告图标
 - **悬浮详情** — 鼠标悬停显示每家提供商的详细信息
@@ -41,7 +41,7 @@
 ### 从 VSIX 安装（发布后）
 
 ```
-code --install-extension ai-usage-statusbar-1.0.0.vsix
+code --install-extension ai-usage-status-bar-1.0.0.vsix
 ```
 
 ## 环境要求
@@ -87,8 +87,8 @@ Codex 路径（`~/.codex/`）和 Copilot API 调用默认即跨平台兼容。
 
 | 风格 | Copilot | ChatGPT | Cursor |
 |------|---------|---------|--------|
-| `minimal` | `$(copilot) 32/50 64%` | `$(openai) 5h90% 7d54%` | `$(cursor) AUTO21% API0%` |
-| `verbose` | `$(copilot) Copilot 32/50 64%` | `$(openai) Codex 5h90% 7d54%` | `$(cursor) Cursor AUTO21% API0%` |
+| `minimal` | `$(copilot) 32/50 64%` | `$(openai) 5h90% 7d54%` | `$(cursor-logo) AUTO21% API0%` |
+| `verbose` | `$(copilot) Copilot 32/50 64%` | `$(openai) Codex 5h90% 7d54%` | `$(cursor-logo) Cursor AUTO21% API0%` |
 
 设置修改后立即生效，无需重新加载。
 

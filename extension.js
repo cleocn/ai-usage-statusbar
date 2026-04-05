@@ -199,13 +199,12 @@ function renderUsage(data) {
   let icon = "$(copilot)";
   let bgColor = undefined;
   if (pct <= 10) {
-    icon = "$(warning)";
     bgColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   } else if (pct <= 25) {
     bgColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   }
 
-  statusBarItem.text = verbose ? `${icon} Copilot ${remaining}/${entitlement}${overageStr}` : `${icon} ${remaining}/${entitlement}${overageStr}`;
+  statusBarItem.text = verbose ? `${icon} Copilot ${remaining}/${entitlement} ${pct}%` : `${icon} ${remaining}/${entitlement} ${pct}%`;
   statusBarItem.tooltip = [
     `GitHub Copilot 高级请求`,
     `已用: ${used} / ${entitlement}`,
@@ -276,7 +275,7 @@ function readCodexRateLimits() {
 function renderChatGPT() {
   const auth = readCodexAuth();
   if (!auth || !auth.tokens) {
-    chatgptStatusBarItem.text = "$(comment) ChatGPT: 未安装";
+    chatgptStatusBarItem.text = "$(openai) ChatGPT: 未安装";
     chatgptStatusBarItem.tooltip = "未找到 ~/.codex/auth.json\n请先登录 Codex 插件";
     return;
   }
@@ -325,9 +324,9 @@ function renderChatGPT() {
       resetStr = resetDate.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
     }
 
-    // show secondary (weekly) as primary number; flag low secondary
-    usageStr = `${secRem}%`;
-    if (secRem <= 20) {
+    // Show both windows in status bar text: 5h and 7d.
+    usageStr = `5h${primRem}% 7d${secRem}%`;
+    if (Math.min(primRem, secRem) <= 20) {
       chatgptStatusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
     } else {
       chatgptStatusBarItem.backgroundColor = undefined;
@@ -355,8 +354,8 @@ function renderChatGPT() {
   }
 
   const displayLabel = rl && rl.primaryUsedPct !== null
-    ? (verbose ? `$(comment) Codex ${usageStr}` : `$(comment) ${usageStr}`)
-    : (verbose ? `$(comment) ChatGPT ${planLabel}` : `$(comment) ${planLabel}`);
+    ? (verbose ? `$(openai) Codex ${usageStr}` : `$(openai) ${usageStr}`)
+    : (verbose ? `$(openai) ChatGPT ${planLabel}` : `$(openai) ${planLabel}`);
 
   chatgptStatusBarItem.text = displayLabel;
   chatgptStatusBarItem.tooltip = usageTooltip;
@@ -383,6 +382,22 @@ function readCursorDb(key) {
   }
 }
 
+async function fetchCursorCurrentPeriodUsage(token) {
+  const res = await fetch(
+    "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    }
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 async function fetchAndRenderCursor() {
   cursorStatusBarItem.text = "$(sync~spin) Cursor";
   cursorStatusBarItem.tooltip = "Cursor 用量加载中…";
@@ -392,7 +407,7 @@ async function fetchAndRenderCursor() {
   const status = readCursorDb("cursorAuth/stripeSubscriptionStatus") ?? "";
 
   if (!token) {
-    cursorStatusBarItem.text = "$(cursor) Cursor: 未登录";
+    cursorStatusBarItem.text = "$(cursor-logo) Cursor: 未登录";
     cursorStatusBarItem.tooltip = "未找到 Cursor 登录信息\n请先在 Cursor 中登录账号";
     return;
   }
@@ -409,6 +424,59 @@ async function fetchAndRenderCursor() {
     plan.charAt(0).toUpperCase() + plan.slice(1);
 
   try {
+    // Preferred API: exposes Auto+Composer and API percentages separately.
+    const periodData = await fetchCursorCurrentPeriodUsage(token);
+    const planUsage = periodData?.planUsage;
+
+    if (
+      planUsage &&
+      typeof planUsage.autoPercentUsed === "number" &&
+      typeof planUsage.apiPercentUsed === "number"
+    ) {
+      const autoUsed = Math.round(planUsage.autoPercentUsed);
+      const apiUsed = Math.round(planUsage.apiPercentUsed);
+      const totalUsed = typeof planUsage.totalPercentUsed === "number"
+        ? Math.round(planUsage.totalPercentUsed)
+        : Math.max(autoUsed, apiUsed);
+
+      const autoRem = Math.max(0, 100 - autoUsed);
+      const apiRem = Math.max(0, 100 - apiUsed);
+      const verbose = getConfig().get('style', 'minimal') === 'verbose';
+      const usageStr = verbose
+        ? `AUTO${autoRem}% API${apiRem}%`
+        : `AUTO${autoRem}% API${apiRem}%`;
+
+      const billingStart = periodData?.billingCycleStart
+        ? new Date(parseInt(periodData.billingCycleStart, 10))
+        : null;
+      const billingEnd = periodData?.billingCycleEnd
+        ? new Date(parseInt(periodData.billingCycleEnd, 10))
+        : null;
+      const cycleStr = billingStart && billingEnd
+        ? `${billingStart.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })} - ${billingEnd.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}`
+        : "";
+
+      cursorStatusBarItem.text = verbose ? `$(cursor-logo) Cursor ${usageStr}` : `$(cursor-logo) ${usageStr}`;
+      cursorStatusBarItem.tooltip = [
+        `Cursor ${planLabel}${status === "active" ? " (订阅中)" : ""}`,
+        `Auto + Composer: 已用 ${autoUsed}% / 剩余 ${autoRem}%`,
+        `API: 已用 ${apiUsed}% / 剩余 ${apiRem}%`,
+        `总计: 已用 ${totalUsed}%`,
+        cycleStr ? `计费周期: ${cycleStr}` : "",
+        periodData?.displayMessage ? `提示: ${periodData.displayMessage}` : "",
+        "",
+        "点击刷新",
+      ].filter(Boolean).join("\n");
+
+      if (Math.max(autoUsed, apiUsed) >= 90) {
+        cursorStatusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+      } else {
+        cursorStatusBarItem.backgroundColor = undefined;
+      }
+      return;
+    }
+
+    // Fallback API: older endpoint with aggregated request count.
     const res = await fetch(
       `https://api2.cursor.sh/auth/usage?user=${encodeURIComponent(userId)}`,
       {
@@ -438,14 +506,11 @@ async function fetchAndRenderCursor() {
       ? new Date(startOfMonth).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
       : "";
 
-    const usageStr = maxRequests
-      ? `${totalRequests}/${maxRequests}`
-      : `${totalRequests}`;
-
     const verbose = getConfig().get('style', 'minimal') === 'verbose';
-    cursorStatusBarItem.text = verbose ? `$(cursor) Cursor ${usageStr}` : `$(cursor) ${usageStr}`;
+    cursorStatusBarItem.text = verbose ? `$(cursor-logo) Cursor AUTO- API-` : `$(cursor-logo) AUTO- API-`;
     cursorStatusBarItem.tooltip = [
       `Cursor ${planLabel}${status === "active" ? " (订阅中)" : ""}`,
+      `当前接口未返回 Auto/API 余量百分比，已回退到旧接口。`,
       `本月请求数: ${totalRequests}${maxRequests ? " / " + maxRequests : ""}`,
       resetStr ? `计费周期开始: ${resetStr}` : "",
       "",
@@ -453,7 +518,7 @@ async function fetchAndRenderCursor() {
     ].filter(Boolean).join("\n");
     cursorStatusBarItem.backgroundColor = undefined;
   } catch (e) {
-    cursorStatusBarItem.text = `$(cursor) -`;
+    cursorStatusBarItem.text = `$(cursor-logo) -`;
     cursorStatusBarItem.tooltip = `Cursor 获取失败: ${e.message}\n点击重试`;
     cursorStatusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   }

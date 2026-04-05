@@ -1,0 +1,11 @@
+.git/**
+.github/**
+.vscode/**
+.vscode-test/**
+node_modules/**
+assets/icon.svg
+**/.DS_Store
+**/*.log
+vscode-publish
+*.vsix
+*.code-workspace

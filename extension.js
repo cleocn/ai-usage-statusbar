@@ -21,6 +21,17 @@ let chatgptStatusBarItem;
 let cursorStatusBarItem;
 let refreshTimer;
 
+function getConfig() {
+  return vscode.workspace.getConfiguration('aiUsage');
+}
+
+function applyProviderVisibility() {
+  const cfg = getConfig();
+  cfg.get('providers.copilot', true) ? statusBarItem.show() : statusBarItem.hide();
+  cfg.get('providers.chatgpt', true) ? chatgptStatusBarItem.show() : chatgptStatusBarItem.hide();
+  cfg.get('providers.cursor', true) ? cursorStatusBarItem.show() : cursorStatusBarItem.hide();
+}
+
 async function activate(context) {
   // Create status bar item (left side, low priority so it doesn't crowd)
   statusBarItem = vscode.window.createStatusBarItem(
@@ -29,7 +40,6 @@ async function activate(context) {
   );
   statusBarItem.command = "copilotUsage.refresh";
   statusBarItem.tooltip = "GitHub Copilot 用量 · 点击刷新";
-  statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
   // ChatGPT/Codex status bar item (slightly lower priority, appears to the right)
@@ -38,7 +48,6 @@ async function activate(context) {
     49
   );
   chatgptStatusBarItem.command = "aiUsage.openChatGPTUsage";
-  chatgptStatusBarItem.show();
   context.subscriptions.push(chatgptStatusBarItem);
 
   // Cursor status bar item
@@ -47,8 +56,10 @@ async function activate(context) {
     48
   );
   cursorStatusBarItem.command = "aiUsage.refreshCursor";
-  cursorStatusBarItem.show();
   context.subscriptions.push(cursorStatusBarItem);
+
+  // Apply initial visibility from settings
+  applyProviderVisibility();
 
   // Register commands
   context.subscriptions.push(
@@ -78,6 +89,17 @@ async function activate(context) {
     fetchAndRenderCursor();
   }, REFRESH_INTERVAL_MS);
   context.subscriptions.push({ dispose: () => clearInterval(refreshTimer) });
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('aiUsage')) {
+        applyProviderVisibility();
+        fetchAndRender(false);
+        renderChatGPT();
+        fetchAndRenderCursor();
+      }
+    })
+  );
 }
 
 async function getGitHubToken(interactive) {
@@ -143,6 +165,7 @@ async function fetchAndRender(interactive) {
 }
 
 function renderUsage(data) {
+  const verbose = getConfig().get('style', 'minimal') === 'verbose';
   const plan = data.copilot_plan ?? "unknown";
   const resetDate = fmtResetDate(data.quota_reset_date);
   const snap = data.quota_snapshots?.premium_interactions;
@@ -153,7 +176,7 @@ function renderUsage(data) {
       : plan === "business" ? "Biz"
       : plan === "enterprise" ? "Ent"
       : plan;
-    statusBarItem.text = `$(copilot) ${planLabel}`;
+    statusBarItem.text = verbose ? `$(copilot) Copilot ${planLabel}` : `$(copilot) ${planLabel}`;
     statusBarItem.tooltip = `GitHub Copilot ${planLabel}\n不限高级请求\n\n点击刷新`;
     statusBarItem.backgroundColor = undefined;
     return;
@@ -161,7 +184,7 @@ function renderUsage(data) {
 
   const { entitlement, percent_remaining, unlimited, overage_count } = snap;
   if (unlimited) {
-    statusBarItem.text = `$(copilot) ∞`;
+    statusBarItem.text = verbose ? `$(copilot) Copilot ∞` : `$(copilot) ∞`;
     statusBarItem.tooltip = `GitHub Copilot\n高级请求: 无上限\n\n点击刷新`;
     statusBarItem.backgroundColor = undefined;
     return;
@@ -181,7 +204,7 @@ function renderUsage(data) {
     bgColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   }
 
-  statusBarItem.text = `${icon} ${remaining}/${entitlement}${overageStr}`;
+  statusBarItem.text = verbose ? `${icon} Copilot ${remaining}/${entitlement}${overageStr}` : `${icon} ${remaining}/${entitlement}${overageStr}`;
   statusBarItem.tooltip = [
     `GitHub Copilot 高级请求`,
     `已用: ${used} / ${entitlement}`,
@@ -250,7 +273,8 @@ function renderChatGPT() {
     renewalFull = "订阅到期: " + d.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
   }
 
-  chatgptStatusBarItem.text = `$(comment) ${planLabel}`;
+  const verbose = getConfig().get('style', 'minimal') === 'verbose';
+  chatgptStatusBarItem.text = verbose ? `$(comment) ChatGPT ${planLabel}` : `$(comment) ${planLabel}`;
   chatgptStatusBarItem.tooltip = [
     `ChatGPT ${planLabel} 订阅`,
     renewalFull,
@@ -341,7 +365,8 @@ async function fetchAndRenderCursor() {
       ? `${totalRequests}/${maxRequests}`
       : `${totalRequests}`;
 
-    cursorStatusBarItem.text = `$(cursor) ${usageStr}`;
+    const verbose = getConfig().get('style', 'minimal') === 'verbose';
+    cursorStatusBarItem.text = verbose ? `$(cursor) Cursor ${usageStr}` : `$(cursor) ${usageStr}`;
     cursorStatusBarItem.tooltip = [
       `Cursor ${planLabel}${status === "active" ? " (订阅中)" : ""}`,
       `本月请求数: ${totalRequests}${maxRequests ? " / " + maxRequests : ""}`,

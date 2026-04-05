@@ -26,6 +26,33 @@
         "command": "aiUsage.refreshCursor",
         "title": "AI Usage: Refresh Cursor Usage"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "AI Usage Status Bar",
+      "properties": {
+        "aiUsage.style": {
+          "type": "string",
+          "enum": ["minimal", "verbose"],
+          "enumDescriptions": ["仅显示图标和数字", "同时显示服务商名称"],
+          "default": "minimal",
+          "description": "状态栏显示风格"
+        },
+        "aiUsage.providers.copilot": {
+          "type": "boolean",
+          "default": true,
+          "description": "在状态栏显示 GitHub Copilot 用量"
+        },
+        "aiUsage.providers.chatgpt": {
+          "type": "boolean",
+          "default": true,
+          "description": "在状态栏显示 ChatGPT 订阅信息"
+        },
+        "aiUsage.providers.cursor": {
+          "type": "boolean",
+          "default": true,
+          "description": "在状态栏显示 Cursor 用量"
+        }
+      }
+    }
   }
 }

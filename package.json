@@ -2,7 +2,7 @@
   "name": "ai-usage-status-bar",
   "displayName": "AI Usage Status Bar for VS Code",
   "description": "Show GitHub Copilot premium request usage in the VS Code status bar",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "publisher": "cleocn",
   "license": "MIT",
   "icon": "assets/icon.png",
@@ -33,15 +33,6 @@
         "title": "AI Usage: Refresh Cursor Usage"
       }
     ],
-    "icons": {
-      "cursor-logo": {
-        "description": "Cursor Logo",
-        "default": {
-          "fontPath": "./resources/cursor-icon.svg",
-          "fontCharacter": "\\e001"
-        }
-      }
-    },
     "configuration": {
       "title": "AI Usage Status Bar",
       "properties": {

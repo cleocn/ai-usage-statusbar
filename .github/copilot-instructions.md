@@ -21,7 +21,7 @@
 
 - Copilot：`$(copilot) <余量>/<总量> <余量百分比>`
 - Codex：`$(openai) 5h<余量百分比> 7d<余量百分比>`
-- Cursor：`$(cursor-logo) AUTO<余量百分比> API<余量百分比>`
+- Cursor：`◈ AUTO<余量百分比> API<余量百分比>`
 
 新增提供商时也必须遵循同一原则：
 

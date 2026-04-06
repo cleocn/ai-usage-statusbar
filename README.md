@@ -8,10 +8,11 @@ English | [中文](./README.zh-CN.md)
 
 ## Features
 
-- **3 providers** — GitHub Copilot quota, ChatGPT/Codex quota windows, and Cursor dual-usage percentages
-- **Cursor dual usage** — shows both **Auto + Composer remaining %** and **API remaining %** in the status bar
-- **Codex dual windows** — shows both **5h remaining %** and **7d remaining %** in the status bar
-- **Official + custom icons** — uses built-in `$(copilot)`, `$(openai)` and custom `$(cursor-logo)` icon
+- **3 providers** — GitHub Copilot quota, ChatGPT/Codex quota windows, and Cursor usage in one place
+- **Reset countdown prefix** — each item starts with an `Xd` countdown to the next reset point
+- **Codex dynamic windows** — status bar uses remaining-to-reset labels (for example `3h` and `6d`) with remaining %
+- **Cursor compact usage** — status bar shows Auto/API remaining % and appends OD amount when available
+- **Clear provider prefixes** — uses built-in `$(copilot)`, `$(openai)` and a stable `◈` prefix for Cursor
 - **Unified external format** — all providers display remaining quota first in a compact format
 - **Color warnings** — warns on low remaining quota (Copilot / Codex / Cursor)
 - **Hover tooltip** — detailed breakdown on hover for each provider
@@ -41,7 +42,7 @@ English | [中文](./README.zh-CN.md)
 ### From VSIX (once published)
 
 ```
-code --install-extension ai-usage-status-bar-1.0.0.vsix
+code --install-extension ai-usage-status-bar-1.0.2.vsix
 ```
 
 ## Requirements
@@ -87,8 +88,8 @@ Search **"AI Usage"** in VS Code Settings, or edit `settings.json` directly:
 
 | Style | Copilot | ChatGPT | Cursor |
 |-------|---------|---------|--------|
-| `minimal` | `$(copilot) 32/50 64%` | `$(openai) 5h90% 7d54%` | `$(cursor-logo) AUTO21% API0%` |
-| `verbose` | `$(copilot) Copilot 32/50 64%` | `$(openai) Codex 5h90% 7d54%` | `$(cursor-logo) Cursor AUTO21% API0%` |
+| `minimal` | `$(copilot) 10d 32/50 64%` | `$(openai) 10d 3h 90% 6d 54%` | `◈ 10d 21% 0% $1.20/$20.00` |
+| `verbose` | `$(copilot) 10d Copilot 32/50 64%` | `$(openai) 10d Codex 3h 90% 6d 54%` | `◈ 10d Cursor 21% 0% $1.20/$20.00` |
 
 Settings take effect immediately without reloading.
 

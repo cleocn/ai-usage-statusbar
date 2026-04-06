@@ -21,6 +21,7 @@ let statusBarItem;
 let chatgptStatusBarItem;
 let cursorStatusBarItem;
 let refreshTimer;
+const CURSOR_PREFIX = "◈";
 
 function getConfig() {
   return vscode.workspace.getConfiguration('aiUsage');
@@ -169,6 +170,8 @@ function renderUsage(data) {
   const verbose = getConfig().get('style', 'minimal') === 'verbose';
   const plan = data.copilot_plan ?? "unknown";
   const resetDate = fmtResetDate(data.quota_reset_date);
+  const resetDaysLabel = formatRemainingDaysLabel(new Date(data.quota_reset_date).getTime());
+  const resetDaysPrefix = resetDaysLabel ? `${resetDaysLabel} ` : "";
   const snap = data.quota_snapshots?.premium_interactions;
 
   if (!snap) {
@@ -177,7 +180,7 @@ function renderUsage(data) {
       : plan === "business" ? "Biz"
       : plan === "enterprise" ? "Ent"
       : plan;
-    statusBarItem.text = verbose ? `$(copilot) Copilot ${planLabel}` : `$(copilot) ${planLabel}`;
+    statusBarItem.text = verbose ? `$(copilot) ${resetDaysPrefix}Copilot ${planLabel}` : `$(copilot) ${resetDaysPrefix}${planLabel}`;
     statusBarItem.tooltip = `GitHub Copilot ${planLabel}\n不限高级请求\n\n点击刷新`;
     statusBarItem.backgroundColor = undefined;
     return;
@@ -185,7 +188,7 @@ function renderUsage(data) {
 
   const { entitlement, percent_remaining, unlimited, overage_count } = snap;
   if (unlimited) {
-    statusBarItem.text = verbose ? `$(copilot) Copilot ∞` : `$(copilot) ∞`;
+    statusBarItem.text = verbose ? `$(copilot) ${resetDaysPrefix}Copilot ∞` : `$(copilot) ${resetDaysPrefix}∞`;
     statusBarItem.tooltip = `GitHub Copilot\n高级请求: 无上限\n\n点击刷新`;
     statusBarItem.backgroundColor = undefined;
     return;
@@ -194,7 +197,7 @@ function renderUsage(data) {
   const used = Math.round(entitlement * (1 - percent_remaining / 100));
   const remaining = entitlement - used;
   const pct = Math.round(percent_remaining);
-  const overageStr = overage_count > 0 ? `+${overage_count}` : "";
+  const overageStr = overage_count > 0 ? `+${overage_count}` : "0";
 
   let icon = "$(copilot)";
   let bgColor = undefined;
@@ -204,13 +207,15 @@ function renderUsage(data) {
     bgColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   }
 
-  statusBarItem.text = verbose ? `${icon} Copilot ${remaining}/${entitlement} ${pct}%` : `${icon} ${remaining}/${entitlement} ${pct}%`;
+  statusBarItem.text = verbose
+    ? `${icon} ${resetDaysPrefix}Copilot ${remaining}/${entitlement} ${pct}%`
+    : `${icon} ${resetDaysPrefix}${remaining}/${entitlement} ${pct}%`;
   statusBarItem.tooltip = [
     `GitHub Copilot 高级请求`,
     `已用: ${used} / ${entitlement}`,
     `剩余: ${remaining} (${pct}%)`,
+    overage_count > 0 ? `On-Demand(超额): ${overageStr}` : "",
     resetDate ? `重置日期: ${resetDate}` : "",
-    overage_count > 0 ? `超额使用: ${overage_count} 次` : "",
     ``,
     `点击刷新`,
   ].filter(Boolean).join("\n");
@@ -266,10 +271,61 @@ function readCodexRateLimits() {
       secondaryWindowMin: extract("x-codex-secondary-window-minutes"),
       primaryResetAt:     extract("x-codex-primary-reset-at"),
       secondaryResetAt:   extract("x-codex-secondary-reset-at"),
+      creditsBalance:     extract("x-codex-credits-balance"),
+      creditsHasCredits:  extract("x-codex-credits-has-credits"),
+      creditsUnlimited:   extract("x-codex-credits-unlimited"),
     };
   } catch {
     return null;
   }
+}
+
+function parseBoolLike(value) {
+  if (typeof value !== "string") return null;
+  const v = value.trim().toLowerCase();
+  if (v === "true" || v === "1" || v === "yes") return true;
+  if (v === "false" || v === "0" || v === "no") return false;
+  return null;
+}
+
+function formatOnDemandBalance(value) {
+  if (typeof value !== "string") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return value;
+  if (n >= 1000) return n.toFixed(0);
+  if (n >= 100) return n.toFixed(1);
+  return n.toFixed(2);
+}
+
+function formatRemainingWindowLabel(resetAtSec, unit) {
+  const ts = parseInt(resetAtSec, 10);
+  if (!Number.isFinite(ts) || ts <= 0) return null;
+  const remainingMs = Math.max(0, ts * 1000 - Date.now());
+  if (unit === "hours") {
+    const h = Math.max(1, Math.ceil(remainingMs / (60 * 60 * 1000)));
+    return `${h}h`;
+  }
+  if (unit === "days") {
+    const d = Math.max(1, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)));
+    return `${d}d`;
+  }
+  return null;
+}
+
+function formatRemainingDaysLabel(targetMs) {
+  if (!Number.isFinite(targetMs) || targetMs <= 0) return null;
+  const remainingMs = Math.max(0, targetMs - Date.now());
+  const days = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+  return `${days}d`;
+}
+
+function getNextResetFromStartOfMonth(startOfMonth) {
+  if (!startOfMonth) return null;
+  const start = new Date(startOfMonth);
+  if (Number.isNaN(start.getTime())) return null;
+  const next = new Date(start);
+  next.setMonth(next.getMonth() + 1);
+  return next;
 }
 
 function renderChatGPT() {
@@ -305,6 +361,8 @@ function renderChatGPT() {
   }
 
   const verbose = getConfig().get('style', 'minimal') === 'verbose';
+  const renewalDaysLabel = formatRemainingDaysLabel(new Date(activeUntil).getTime());
+  const renewalDaysPrefix = renewalDaysLabel ? `${renewalDaysLabel} ` : "";
 
   // Try to read rate limit data from Codex logs SQLite
   const rl = readCodexRateLimits();
@@ -315,18 +373,26 @@ function renderChatGPT() {
     const secUsed  = parseInt(rl.secondaryUsedPct, 10);
     const primRem  = 100 - primUsed;
     const secRem   = 100 - secUsed;
-    const primWin  = rl.primaryWindowMin ? `${Math.round(parseInt(rl.primaryWindowMin, 10) / 60)}h` : "5h";
-    const secWin   = rl.secondaryWindowMin ? `${Math.round(parseInt(rl.secondaryWindowMin, 10) / (60 * 24))}d` : "7d";
+    const primWinFallback = rl.primaryWindowMin ? `${Math.round(parseInt(rl.primaryWindowMin, 10) / 60)}h` : "5h";
+    const secWinFallback  = rl.secondaryWindowMin ? `${Math.round(parseInt(rl.secondaryWindowMin, 10) / (60 * 24))}d` : "7d";
+    const primWin = formatRemainingWindowLabel(rl.primaryResetAt, "hours") ?? primWinFallback;
+    const secWin  = formatRemainingWindowLabel(rl.secondaryResetAt, "days") ?? secWinFallback;
 
     let resetStr = "";
     if (rl.secondaryResetAt) {
       const resetDate = new Date(parseInt(rl.secondaryResetAt, 10) * 1000);
       resetStr = resetDate.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
     }
-
-    // Show both windows in status bar text: 5h and 7d.
-    usageStr = `5h${primRem}% 7d${secRem}%`;
-    if (Math.min(primRem, secRem) <= 20) {
+    const hasCredits = parseBoolLike(rl.creditsHasCredits);
+    const unlimitedCredits = parseBoolLike(rl.creditsUnlimited);
+    const onDemandStr = unlimitedCredits === true
+      ? "∞"
+      : hasCredits === false
+      ? "0"
+      : formatOnDemandBalance(rl.creditsBalance);
+    // Show both windows in status bar text using remaining time labels.
+    usageStr = `${primWin} ${primRem}% ${secWin} ${secRem}%`;
+    if (Math.min(primRem, secRem) <= 20 || hasCredits === false) {
       chatgptStatusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
     } else {
       chatgptStatusBarItem.backgroundColor = undefined;
@@ -336,6 +402,7 @@ function renderChatGPT() {
       `ChatGPT/Codex 用量 (${planLabel})`,
       `${primWin} 窗口: 已用 ${primUsed}% / 剩余 ${primRem}%`,
       `${secWin} 窗口: 已用 ${secUsed}% / 剩余 ${secRem}%`,
+      onDemandStr ? `On-Demand: ${onDemandStr}${unlimitedCredits === true ? " (不限额)" : ""}` : "",
       resetStr ? `7d 窗口重置: ${resetStr}` : "",
       renewalFull,
       "",
@@ -354,8 +421,8 @@ function renderChatGPT() {
   }
 
   const displayLabel = rl && rl.primaryUsedPct !== null
-    ? (verbose ? `$(openai) Codex ${usageStr}` : `$(openai) ${usageStr}`)
-    : (verbose ? `$(openai) ChatGPT ${planLabel}` : `$(openai) ${planLabel}`);
+    ? (verbose ? `$(openai) ${renewalDaysPrefix}Codex ${usageStr}` : `$(openai) ${renewalDaysPrefix}${usageStr}`)
+    : (verbose ? `$(openai) ${renewalDaysPrefix}ChatGPT ${planLabel}` : `$(openai) ${renewalDaysPrefix}${planLabel}`);
 
   chatgptStatusBarItem.text = displayLabel;
   chatgptStatusBarItem.tooltip = usageTooltip;
@@ -407,7 +474,7 @@ async function fetchAndRenderCursor() {
   const status = readCursorDb("cursorAuth/stripeSubscriptionStatus") ?? "";
 
   if (!token) {
-    cursorStatusBarItem.text = "$(cursor-logo) Cursor: 未登录";
+    cursorStatusBarItem.text = `${CURSOR_PREFIX} Cursor: 未登录`;
     cursorStatusBarItem.tooltip = "未找到 Cursor 登录信息\n请先在 Cursor 中登录账号";
     return;
   }
@@ -427,6 +494,17 @@ async function fetchAndRenderCursor() {
     // Preferred API: exposes Auto+Composer and API percentages separately.
     const periodData = await fetchCursorCurrentPeriodUsage(token);
     const planUsage = periodData?.planUsage;
+    const spendLimitUsage = periodData?.spendLimitUsage;
+
+    const formatUsd = (cents) => {
+      if (typeof cents !== "number" || !Number.isFinite(cents)) return null;
+      return `$${(cents / 100).toFixed(2)}`;
+    };
+
+    const odUsed = formatUsd(spendLimitUsage?.individualUsed);
+    const odLimit = formatUsd(spendLimitUsage?.individualLimit);
+    const odRem = formatUsd(spendLimitUsage?.individualRemaining);
+    const odStr = odUsed && odLimit ? `${odUsed}/${odLimit}` : "-";
 
     if (
       planUsage &&
@@ -442,9 +520,9 @@ async function fetchAndRenderCursor() {
       const autoRem = Math.max(0, 100 - autoUsed);
       const apiRem = Math.max(0, 100 - apiUsed);
       const verbose = getConfig().get('style', 'minimal') === 'verbose';
-      const usageStr = verbose
-        ? `AUTO${autoRem}% API${apiRem}%`
-        : `AUTO${autoRem}% API${apiRem}%`;
+      const usageStr = odUsed && odLimit
+        ? `${autoRem}% ${apiRem}% ${odStr}`
+        : `${autoRem}% ${apiRem}%`;
 
       const billingStart = periodData?.billingCycleStart
         ? new Date(parseInt(periodData.billingCycleStart, 10))
@@ -452,15 +530,20 @@ async function fetchAndRenderCursor() {
       const billingEnd = periodData?.billingCycleEnd
         ? new Date(parseInt(periodData.billingCycleEnd, 10))
         : null;
+      const resetDaysLabel = billingEnd ? formatRemainingDaysLabel(billingEnd.getTime()) : null;
+      const resetDaysPrefix = resetDaysLabel ? `${resetDaysLabel} ` : "";
       const cycleStr = billingStart && billingEnd
         ? `${billingStart.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })} - ${billingEnd.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}`
         : "";
 
-      cursorStatusBarItem.text = verbose ? `$(cursor-logo) Cursor ${usageStr}` : `$(cursor-logo) ${usageStr}`;
+      cursorStatusBarItem.text = verbose ? `${CURSOR_PREFIX} ${resetDaysPrefix}Cursor ${usageStr}` : `${CURSOR_PREFIX} ${resetDaysPrefix}${usageStr}`;
       cursorStatusBarItem.tooltip = [
         `Cursor ${planLabel}${status === "active" ? " (订阅中)" : ""}`,
         `Auto + Composer: 已用 ${autoUsed}% / 剩余 ${autoRem}%`,
         `API: 已用 ${apiUsed}% / 剩余 ${apiRem}%`,
+        odUsed && odLimit
+          ? `On-Demand: 已用 ${odUsed} / 限额 ${odLimit}${odRem ? ` / 剩余 ${odRem}` : ""}`
+          : `On-Demand: 当前接口未提供`,
         `总计: 已用 ${totalUsed}%`,
         cycleStr ? `计费周期: ${cycleStr}` : "",
         periodData?.displayMessage ? `提示: ${periodData.displayMessage}` : "",
@@ -505,12 +588,16 @@ async function fetchAndRenderCursor() {
     const resetStr = startOfMonth
       ? new Date(startOfMonth).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
       : "";
+    const nextReset = getNextResetFromStartOfMonth(startOfMonth);
+    const resetDaysLabel = nextReset ? formatRemainingDaysLabel(nextReset.getTime()) : null;
+    const resetDaysPrefix = resetDaysLabel ? `${resetDaysLabel} ` : "";
 
     const verbose = getConfig().get('style', 'minimal') === 'verbose';
-    cursorStatusBarItem.text = verbose ? `$(cursor-logo) Cursor AUTO- API-` : `$(cursor-logo) AUTO- API-`;
+    cursorStatusBarItem.text = verbose ? `${CURSOR_PREFIX} ${resetDaysPrefix}Cursor - -` : `${CURSOR_PREFIX} ${resetDaysPrefix}- -`;
     cursorStatusBarItem.tooltip = [
       `Cursor ${planLabel}${status === "active" ? " (订阅中)" : ""}`,
       `当前接口未返回 Auto/API 余量百分比，已回退到旧接口。`,
+      `On-Demand: 当前接口未提供`,
       `本月请求数: ${totalRequests}${maxRequests ? " / " + maxRequests : ""}`,
       resetStr ? `计费周期开始: ${resetStr}` : "",
       "",
@@ -518,7 +605,7 @@ async function fetchAndRenderCursor() {
     ].filter(Boolean).join("\n");
     cursorStatusBarItem.backgroundColor = undefined;
   } catch (e) {
-    cursorStatusBarItem.text = `$(cursor-logo) -`;
+    cursorStatusBarItem.text = `${CURSOR_PREFIX} -`;
     cursorStatusBarItem.tooltip = `Cursor 获取失败: ${e.message}\n点击重试`;
     cursorStatusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
   }

@@ -9,3 +9,4 @@ assets/icon.svg
 vscode-publish
 *.vsix
 *.code-workspace
+.npm-cache/**

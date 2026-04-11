@@ -12,10 +12,11 @@
 - **重置倒计时前缀** — 每个状态栏项都会在图标后先显示 `Xd`（距离下个重置点的天数）
 - **Codex 动态窗口标签** — 状态栏显示距离重置还剩的时间标签（例如 `3h`、`6d`）和剩余百分比
 - **Cursor 精简外显** — 状态栏显示 Auto/API 剩余百分比，若有 OD 则追加金额数值
-- **清晰前缀图标** — 使用内置 `$(copilot)`、`$(openai)`，Cursor 使用稳定可显示的 `◈` 前缀
+- **清晰前缀图标** — Copilot 使用 `$(github)`，ChatGPT/Codex 使用内置 `$(openai)`，Cursor 使用稳定可显示的 `◈` 前缀
 - **统一外显规范** — 所有提供商都优先显示余量信息，状态栏格式保持一致
 - **颜色预警** — Copilot 剩余 ≤ 25% 时状态栏变橙色，≤ 10% 时附加警告图标
-- **悬浮详情** — 鼠标悬停显示每家提供商的详细信息
+- **悬浮详情** — 鼠标悬停显示每家提供商的详细信息（含已识别的登录账号）
+- **ChatGPT 更新提示** — ChatGPT/Codex 悬浮详情显示“上次更新时间”
 - **自动刷新** — 每 30 分钟在后台自动更新
 - **风格切换** — 通过设置在 `minimal`（`32/50`）和 `verbose`（`Copilot 32/50`）之间切换
 - **按需开关** — 可独立控制每家提供商的状态栏条目显示与隐藏
@@ -41,8 +42,8 @@
 
 ### 从 VSIX 安装（发布后）
 
-```
-code --install-extension ai-usage-status-bar-1.0.2.vsix
+```bash
+code --install-extension ai-usage-status-bar-1.0.3.vsix
 ```
 
 ## 环境要求
@@ -88,8 +89,8 @@ Codex 路径（`~/.codex/`）和 Copilot API 调用默认即跨平台兼容。
 
 | 风格 | Copilot | ChatGPT | Cursor |
 |------|---------|---------|--------|
-| `minimal` | `$(copilot) 10d 32/50 64%` | `$(openai) 10d 3h 90% 6d 54%` | `◈ 10d 21% 0% $1.20/$20.00` |
-| `verbose` | `$(copilot) 10d Copilot 32/50 64%` | `$(openai) 10d Codex 3h 90% 6d 54%` | `◈ 10d Cursor 21% 0% $1.20/$20.00` |
+| `minimal` | `$(github) 10d 32/50 64%` | `$(openai) 10d 3h 90% 6d 54%` | `◈ 10d 21% 0% $1.20/$20.00` |
+| `verbose` | `$(github) 10d Copilot 32/50 64%` | `$(openai) 10d Codex 3h 90% 6d 54%` | `◈ 10d Cursor 21% 0% $1.20/$20.00` |
 
 设置修改后立即生效，无需重新加载。
 
@@ -106,7 +107,7 @@ Codex 路径（`~/.codex/`）和 Copilot API 调用默认即跨平台兼容。
 
 - **Copilot**：调用 `vscode.authentication.getSession('github', ['read:user'])` 获取 Token → 请求 `api.github.com/copilot_internal/user`（未文档化内部接口，可能随时变更）
 - **ChatGPT/Codex**：读取 `~/.codex/auth.json` 获取套餐/续费信息，再从 `~/.codex/logs_1.sqlite` 的 `x-codex-*` 响应头提取窗口用量
-- **Cursor**：读取 `state.vscdb`（SQLite）获取 Bearer Token → 请求 `api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage` 获取 Auto/API 百分比（必要时回退 `auth/usage`）
+- **Cursor**：读取 `state.vscdb`（SQLite）获取 Bearer Token → 请求 `api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage` 获取 Auto/API 百分比（必要时回退 `auth/usage`）；状态栏前缀固定使用兼容性更稳定的 `◈`
 
 ## License
 

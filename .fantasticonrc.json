@@ -1,0 +1,11 @@
+{
+  "inputDir": "resources/icons",
+  "outputDir": "resources",
+  "name": "cursor-icons",
+  "prefix": "cursor",
+  "fontTypes": ["ttf", "woff", "woff2"],
+  "assetTypes": ["json"],
+  "codepoints": {
+    "cursor-logo": 57345
+  }
+}

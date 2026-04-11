@@ -12,10 +12,11 @@ English | [中文](./README.zh-CN.md)
 - **Reset countdown prefix** — each item starts with an `Xd` countdown to the next reset point
 - **Codex dynamic windows** — status bar uses remaining-to-reset labels (for example `3h` and `6d`) with remaining %
 - **Cursor compact usage** — status bar shows Auto/API remaining % and appends OD amount when available
-- **Clear provider prefixes** — uses built-in `$(copilot)`, `$(openai)` and a stable `◈` prefix for Cursor
+- **Clear provider prefixes** — uses `$(github)` for Copilot, `$(openai)` for ChatGPT/Codex, and a stable `◈` fallback for Cursor
 - **Unified external format** — all providers display remaining quota first in a compact format
 - **Color warnings** — warns on low remaining quota (Copilot / Codex / Cursor)
-- **Hover tooltip** — detailed breakdown on hover for each provider
+- **Hover tooltip** — detailed breakdown on hover for each provider, including detected signed-in account
+- **ChatGPT update hint** — ChatGPT/Codex tooltip includes a "last updated" timestamp
 - **Auto-refresh** — updates every 30 minutes in the background
 - **Style switching** — toggle between `minimal` (`32/50`) and `verbose` (`Copilot 32/50`) via settings
 - **Per-provider toggle** — enable or disable each provider's status bar item independently
@@ -41,8 +42,8 @@ English | [中文](./README.zh-CN.md)
 
 ### From VSIX (once published)
 
-```
-code --install-extension ai-usage-status-bar-1.0.2.vsix
+```bash
+code --install-extension ai-usage-status-bar-1.0.3.vsix
 ```
 
 ## Requirements
@@ -88,8 +89,8 @@ Search **"AI Usage"** in VS Code Settings, or edit `settings.json` directly:
 
 | Style | Copilot | ChatGPT | Cursor |
 |-------|---------|---------|--------|
-| `minimal` | `$(copilot) 10d 32/50 64%` | `$(openai) 10d 3h 90% 6d 54%` | `◈ 10d 21% 0% $1.20/$20.00` |
-| `verbose` | `$(copilot) 10d Copilot 32/50 64%` | `$(openai) 10d Codex 3h 90% 6d 54%` | `◈ 10d Cursor 21% 0% $1.20/$20.00` |
+| `minimal` | `$(github) 10d 32/50 64%` | `$(openai) 10d 3h 90% 6d 54%` | `◈ 10d 21% 0% $1.20/$20.00` |
+| `verbose` | `$(github) 10d Copilot 32/50 64%` | `$(openai) 10d Codex 3h 90% 6d 54%` | `◈ 10d Cursor 21% 0% $1.20/$20.00` |
 
 Settings take effect immediately without reloading.
 
@@ -106,7 +107,7 @@ Settings take effect immediately without reloading.
 
 - **Copilot**: calls `vscode.authentication.getSession('github', ['read:user'])` → queries `api.github.com/copilot_internal/user` (undocumented internal endpoint, may change)
 - **ChatGPT/Codex**: reads `~/.codex/auth.json` for plan/subscription and `~/.codex/logs_1.sqlite` for `x-codex-*` usage headers
-- **Cursor**: reads `state.vscdb` (SQLite) for the Bearer token → queries `api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage` for Auto/API percentages (falls back to `auth/usage` when needed)
+- **Cursor**: reads `state.vscdb` (SQLite) for the Bearer token → queries `api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage` for Auto/API percentages (falls back to `auth/usage` when needed); the status bar keeps a stable `◈` prefix for compatibility across VS Code themes/versions
 
 ## License
 

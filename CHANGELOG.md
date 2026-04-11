@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows Semantic Versioning.
 
+## [1.0.3] - 2026-04-11
+
+### Added
+- Copilot, ChatGPT/Codex, and Cursor tooltips now show the detected signed-in account when available.
+- ChatGPT/Codex tooltips now include a "last updated" timestamp.
+- Added bundled Cursor icon font assets for future UI integration.
+
+### Changed
+- Copilot status bar prefix now uses `$(github)` for more reliable rendering.
+- Codex usage now reads from the latest available `~/.codex/logs_*.sqlite` database instead of assuming `logs_1.sqlite`.
+- Remaining-time labels now switch to finer-grained `m`/`h` units near reset time.
+- Cursor status bar keeps the stable `◈` fallback prefix across VS Code themes/versions for compatibility.
+- Refreshed English and Chinese documentation for the current status bar behavior and release package name.
+
 ## [1.0.2] - 2026-04-07
 
 ### Changed
